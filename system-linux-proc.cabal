@@ -3,7 +3,7 @@
 
 name:                system-linux-proc
 version:             0.1.0.0
--- synopsis:
+synopsis:            A library for accessing the /proc filesystem in Linux
 -- description:
 homepage:            https://github.com/erikd/system-linux-proc
 license:             BSD3
