@@ -3,10 +3,11 @@
 module System.Linux.Proc.MemInfo
   ( MemInfo (..)
   , readProcMemInfo
+  , readProcMemInfoKey
   , readProcMemUsage
   ) where
 
-import           Control.Error (fromMaybe, runExceptT, throwE)
+import           Control.Error (ExceptT (..), fromMaybe, runExceptT, throwE)
 
 import           Data.Attoparsec.ByteString.Char8 (Parser)
 import qualified Data.Attoparsec.ByteString.Char8 as A
@@ -15,6 +16,7 @@ import qualified Data.ByteString.Char8 as BS
 
 import qualified Data.List as DL
 import qualified Data.Map.Strict as DM
+import           Data.Maybe (mapMaybe)
 import qualified Data.Text as T
 import           Data.Word (Word64)
 
@@ -69,15 +71,39 @@ readProcMemUsage =
     convert :: (Word64, Word64) -> Double
     convert (avail, total) = fromIntegral avail / fromIntegral total
 
-    fromEither :: a -> Either e a -> a
-    fromEither a (Left _) = a
-    fromEither _ (Right a) = a
+-- | Read the value for the given key from `/proc/meminfo`.
+-- Although this is in `IO` all exceptions and errors should be caught and
+-- returned as a `ProcError`.
+readProcMemInfoKey :: ByteString -> IO (Either ProcError Word64)
+readProcMemInfoKey target =
+  runExceptT $ do
+    xs <- BS.lines <$> readProcFile fpMemInfo
+    hoistEither . headEither keyError $ mapMaybe findValue xs
+  where
+    findValue :: ByteString -> Maybe Word64
+    findValue bs =
+      let (key, rest) = BS.break (== ':') bs in
+      if key /= target 
+        then Nothing
+        else either (const Nothing) Just $ A.parseOnly pValue rest
+    keyError :: ProcError
+    keyError = ProcMemInfoKeyError $ T.pack (BS.unpack target)
 
 -- -----------------------------------------------------------------------------
 -- Internals.
 
 fpMemInfo :: FilePath
 fpMemInfo = "/proc/meminfo"
+
+fromEither :: a -> Either e a -> a
+fromEither a = either (const a) id
+
+headEither :: e -> [a] -> Either e a
+headEither e [] = Left e
+headEither _ (x:_) = Right x
+
+hoistEither :: Monad m => Either e a -> ExceptT e m a
+hoistEither = ExceptT . pure
 
 construct :: [(ByteString, Word64)] -> MemInfo
 construct xs =

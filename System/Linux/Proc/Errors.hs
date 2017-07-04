@@ -13,7 +13,7 @@ import qualified Data.Text as T
 data ProcError
   = ProcReadError !FilePath !Text
   | ProcParseError !FilePath !Text
-  -- | MemInfoBadField !Text
+  | ProcMemInfoKeyError !Text
   deriving (Eq, Show)
 
 renderProcError :: ProcError -> Text
@@ -22,5 +22,7 @@ renderProcError = \case
     [ "Error reading '", T.pack fp, "': ", msg ]
   ProcParseError fp msg -> T.concat
     [ "Parser error on file '", T.pack fp, ": ", msg ]
+  ProcMemInfoKeyError key -> T.concat
+    [ "MemInfo: Key not found: '", key, "'" ]
 
 
