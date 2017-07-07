@@ -20,7 +20,7 @@ import           Data.Maybe (mapMaybe)
 import qualified Data.Text as T
 import           Data.Word (Word64)
 
-import           System.Linux.Proc.File
+import           System.Linux.Proc.IO
 import           System.Linux.Proc.Errors
 
 -- | A struct to contain information parsed from the `/proc/meminfo` file

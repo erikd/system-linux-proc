@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module System.Linux.Proc.File
-  ( readProcFile
+module System.Linux.Proc.IO
+  ( listProcDirectory
+  , readProcFile
   ) where
 
 import           Control.Error (ExceptT, handleExceptT)
@@ -14,6 +15,7 @@ import qualified Data.Text as T
 
 import           System.IO (IOMode (..), withFile)
 
+import           System.Directory (listDirectory)
 import           System.Linux.Proc.Errors
 
 
@@ -24,6 +26,10 @@ readProcFile fpath =
     -- length before reading the file and files in the /proc filesystem
     -- are reported as having zero length.
     withFile fpath ReadMode BS.hGetContents
+
+listProcDirectory :: FilePath -> ExceptT ProcError IO [FilePath]
+listProcDirectory fpath =
+  handleExceptT (ProcReadError fpath . ioErrorToText) $ listDirectory fpath
 
 ioErrorToText :: IOError -> Text
 ioErrorToText = T.pack . show
