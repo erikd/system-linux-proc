@@ -15,7 +15,7 @@ import qualified Data.Text as T
 
 import           System.IO (IOMode (..), withFile)
 
-import           System.Directory (listDirectory)
+import           System.Directory (getDirectoryContents)
 import           System.Linux.Proc.Errors
 
 
@@ -29,7 +29,7 @@ readProcFile fpath =
 
 listProcDirectory :: FilePath -> ExceptT ProcError IO [FilePath]
 listProcDirectory fpath =
-  handleExceptT (ProcReadError fpath . ioErrorToText) $ listDirectory fpath
+  handleExceptT (ProcReadError fpath . ioErrorToText) $ getDirectoryContents fpath
 
 ioErrorToText :: IOError -> Text
 ioErrorToText = T.pack . show
