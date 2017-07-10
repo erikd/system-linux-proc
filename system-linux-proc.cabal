@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                system-linux-proc
-version:             0.1.0.2
+version:             0.1.0.3
 synopsis:            A library for accessing the /proc filesystem in Linux
 -- description:
 homepage:            https://github.com/erikd/system-linux-proc
