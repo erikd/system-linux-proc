@@ -5,6 +5,7 @@ module System.Linux.Proc.MemInfo
   , readProcMemInfo
   , readProcMemInfoKey
   , readProcMemUsage
+  , renderSizeBytes
   ) where
 
 import           Control.Error (ExceptT (..), fromMaybe, runExceptT, throwE)
@@ -17,6 +18,8 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.List as DL
 import qualified Data.Map.Strict as DM
 import           Data.Maybe (mapMaybe)
+import           Data.Monoid ((<>))
+import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Word (Word64)
 
@@ -83,11 +86,26 @@ readProcMemInfoKey target =
     findValue :: ByteString -> Maybe Word64
     findValue bs =
       let (key, rest) = BS.break (== ':') bs in
-      if key /= target 
+      if key /= target
         then Nothing
         else either (const Nothing) Just $ A.parseOnly pValue rest
     keyError :: ProcError
     keyError = ProcMemInfoKeyError $ T.pack (BS.unpack target)
+
+-- | Render a Word64 as an easy to read size with a bytes, kB, MB, GB TB or PB
+-- suffix.
+renderSizeBytes :: Word64 -> Text
+renderSizeBytes s
+  | d >= 1e15 = render (d * 1e15) <> " PB"
+  | d >= 1e12 = render (d * 1e12) <> " TB"
+  | d >= 1e12 = render (d * 1e12) <> " TB"
+  | d >= 1e9 = render (d * 1e-9) <> " GB"
+  | d >= 1e6 = render (d * 1e-6) <> " MB"
+  | d >= 1e3 = render (d * 1e-3) <> " kB"
+  | otherwise = T.pack (show s) <> " bytes"
+  where
+    d = fromIntegral s :: Double
+    render = T.pack . DL.take 5 . show
 
 -- -----------------------------------------------------------------------------
 -- Internals.
