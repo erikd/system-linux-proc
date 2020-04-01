@@ -73,18 +73,6 @@ readProcTcpSockets pid = runExceptT $ do
 fpNetTcp :: ProcessId -> FilePath
 fpNetTcp (ProcessId pid) = "/proc/" ++ show pid ++ "/net/tcp"
 
-hexadecimalOfLength :: Int -> Parser Int
-hexadecimalOfLength n = do
-  ds <- A.count n (A.satisfy (isHexDigit . fromEnum))
-  return $ foldl step 0 (fmap (fromEnum :: Char -> Int) ds)
- where
-  isHexDigit :: Int -> Bool
-  isHexDigit w =
-    (w >= 48 && w <= 57) || (w >= 97 && w <= 102) || (w >= 65 && w <= 70)
-  step :: Int -> Int -> Int
-  step a w | w >= 48 && w <= 57 = (a `shiftL` 4) .|. (w - 48)
-           | w >= 97            = (a `shiftL` 4) .|. (w - 87)
-           | otherwise          = (a `shiftL` 4) .|. (w - 55)
 
 -- -----------------------------------------------------------------------------
 -- Parsers.
@@ -135,6 +123,10 @@ internalData = do
   _ <- A.many1 space
   return ()
 
+-- The address parts of the `net/tcp` file is a hexadecimal representation of the IP
+-- address and the port. The octets of the IP address have been reversed: 127.0.0.1
+-- has been reversed to 1.0.0.127 and then rendered as hex numbers. The port is only
+-- rendered as a hex number; it's not been reversed.
 addr :: Parser (BS.ByteString, Int)
 addr = do
   addrParts <- replicateM 4 $ hexadecimalOfLength 2
@@ -144,6 +136,7 @@ addr = do
         BS.concat . intersperse "." . fmap (BS.pack . show) $ reverse addrParts
   return (addr', port)
 
+-- See include/net/tcp_states.h of your kernel's source code for all possible states.
 state :: Parser TcpState
 state = lookupState <$> (A.char '0' *> A.satisfy (A.inClass "1-9A-C"))
  where
@@ -161,3 +154,19 @@ state = lookupState <$> (A.char '0' *> A.satisfy (A.inClass "1-9A-C"))
   lookupState 'B' = TcpClosing
   lookupState 'C' = TcpNewSynReceive
   lookupState _   = undefined -- Intentionally undefined.
+
+-- Helper parser for hexadecimal strings of a known length. Attoparsec's hexadecimal
+-- will keep parsing digits to cover cases like '1', 'AB2', 'deadbeef', etc. In our
+-- case we need to parse cases of exact length like port numbers.
+hexadecimalOfLength :: Int -> Parser Int
+hexadecimalOfLength n = do
+  ds <- A.count n (A.satisfy (isHexDigit . fromEnum))
+  return $ foldl step 0 (fmap (fromEnum :: Char -> Int) ds)
+ where
+  isHexDigit :: Int -> Bool
+  isHexDigit w =
+    (w >= 48 && w <= 57) || (w >= 97 && w <= 102) || (w >= 65 && w <= 70)
+  step :: Int -> Int -> Int
+  step a w | w >= 48 && w <= 57 = (a `shiftL` 4) .|. (w - 48)
+           | w >= 97            = (a `shiftL` 4) .|. (w - 87)
+           | otherwise          = (a `shiftL` 4) .|. (w - 55)
