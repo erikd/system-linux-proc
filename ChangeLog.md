@@ -1,5 +1,6 @@
 # Revision history for system-linux-memory
 
-## 0.1.0.0  -- YYYY-mm-dd
+## 0.1.1.0  -- 2020-04-04
 
-* First version. Released on an unsuspecting world.
+* Add `/proc/<pid>/net/tcp` parser (thanks Maarten)
+* Add simple tests.
