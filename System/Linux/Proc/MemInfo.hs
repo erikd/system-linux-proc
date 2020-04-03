@@ -11,16 +11,16 @@ module System.Linux.Proc.MemInfo
 import           Control.Error (ExceptT (..), fromMaybe, runExceptT, throwE)
 
 import           Data.Attoparsec.ByteString.Char8 (Parser)
-import qualified Data.Attoparsec.ByteString.Char8 as A
+import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
 
-import qualified Data.List as DL
-import qualified Data.Map.Strict as DM
+import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import           Data.Maybe (mapMaybe)
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
-import qualified Data.Text as T
+import qualified Data.Text as Text
 import           Data.Word (Word64)
 
 import           System.Linux.Proc.IO
@@ -48,8 +48,8 @@ readProcMemInfo :: IO (Either ProcError MemInfo)
 readProcMemInfo =
   runExceptT $ do
     bs <- readProcFile fpMemInfo
-    case A.parseOnly parseFields bs of
-      Left e -> throwE $ ProcParseError fpMemInfo (T.pack e)
+    case Atto.parseOnly parseFields bs of
+      Left e -> throwE $ ProcParseError fpMemInfo (Text.pack e)
       Right xs -> pure $ construct xs
 
 -- | Read `/proc/meminfo` file and return a value calculated from:
@@ -62,13 +62,13 @@ readProcMemUsage :: IO (Either ProcError Double)
 readProcMemUsage =
   runExceptT $ do
     xs <- BS.lines <$> readProcFile fpMemInfo
-    pure . convert $ DL.foldl' getValues (0, 1) xs
+    pure . convert $ List.foldl' getValues (0, 1) xs
   where
     getValues :: (Word64, Word64) -> ByteString -> (Word64, Word64)
     getValues (avail, total) bs =
       case BS.break (== ':') bs of
-        ("MemTotal", rest) -> (avail, fromEither total $ A.parseOnly pValue rest)
-        ("MemAvailable", rest) -> (fromEither avail $ A.parseOnly pValue rest, total)
+        ("MemTotal", rest) -> (avail, fromEither total $ Atto.parseOnly pValue rest)
+        ("MemAvailable", rest) -> (fromEither avail $ Atto.parseOnly pValue rest, total)
         _ -> (avail, total)
 
     convert :: (Word64, Word64) -> Double
@@ -88,9 +88,9 @@ readProcMemInfoKey target =
       let (key, rest) = BS.break (== ':') bs in
       if key /= target
         then Nothing
-        else either (const Nothing) Just $ A.parseOnly pValue rest
+        else either (const Nothing) Just $ Atto.parseOnly pValue rest
     keyError :: ProcError
-    keyError = ProcMemInfoKeyError $ T.pack (BS.unpack target)
+    keyError = ProcMemInfoKeyError $ Text.pack (BS.unpack target)
 
 -- | Render a Word64 as an easy to read size with a bytes, kB, MB, GB TB or PB
 -- suffix.
@@ -102,10 +102,10 @@ renderSizeBytes s
   | d >= 1e9 = render (d * 1e-9) <> " GB"
   | d >= 1e6 = render (d * 1e-6) <> " MB"
   | d >= 1e3 = render (d * 1e-3) <> " kB"
-  | otherwise = T.pack (show s) <> " bytes"
+  | otherwise = Text.pack (show s) <> " bytes"
   where
     d = fromIntegral s :: Double
-    render = T.pack . DL.take 5 . show
+    render = Text.pack . List.take 5 . show
 
 -- -----------------------------------------------------------------------------
 -- Internals.
@@ -126,21 +126,21 @@ hoistEither = ExceptT . pure
 construct :: [(ByteString, Word64)] -> MemInfo
 construct xs =
   MemInfo
-    (fromMaybe 0 $ DM.lookup "MemTotal" mp)
-    (fromMaybe 0 $ DM.lookup "MemFree" mp)
-    (fromMaybe 0 $ DM.lookup "MemAvailable" mp)
-    (fromMaybe 0 $ DM.lookup "Buffers" mp)
-    (fromMaybe 0 $ DM.lookup "SwapTotal" mp)
-    (fromMaybe 0 $ DM.lookup "SwapFree" mp)
+    (fromMaybe 0 $ Map.lookup "MemTotal" mp)
+    (fromMaybe 0 $ Map.lookup "MemFree" mp)
+    (fromMaybe 0 $ Map.lookup "MemAvailable" mp)
+    (fromMaybe 0 $ Map.lookup "Buffers" mp)
+    (fromMaybe 0 $ Map.lookup "SwapTotal" mp)
+    (fromMaybe 0 $ Map.lookup "SwapFree" mp)
   where
-    mp = DM.fromList xs
+    mp = Map.fromList xs
 
 -- -----------------------------------------------------------------------------
 -- Parsers.
 
 parseFields :: Parser [(ByteString, Word64)]
 parseFields =
-  A.many1 (pFieldValue <* A.endOfLine)
+  Atto.many1 (pFieldValue <* Atto.endOfLine)
 
 
 {-
@@ -161,13 +161,13 @@ pFieldValue =
 
 pName :: Parser ByteString
 pName =
-  A.takeWhile (/= ':')
+  Atto.takeWhile (/= ':')
 
 pValue :: Parser Word64
 pValue = do
-  val <- A.char ':' *> A.skipSpace *> A.decimal
-  A.skipSpace
-  rest <- A.takeWhile (not . A.isSpace)
+  val <- Atto.char ':' *> Atto.skipSpace *> Atto.decimal
+  Atto.skipSpace
+  rest <- Atto.takeWhile (not . Atto.isSpace)
   case rest of
     "" -> pure val
     "kB" -> pure $ 1024 * val

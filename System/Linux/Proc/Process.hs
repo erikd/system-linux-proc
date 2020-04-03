@@ -12,6 +12,8 @@ import           Data.Maybe (mapMaybe)
 import           System.Linux.Proc.IO
 import           System.Linux.Proc.Errors
 
+import           Text.Read (readMaybe)
+
 newtype ProcessId
   = ProcessId { unProcessId :: Int }
   deriving (Eq, Show)
@@ -20,10 +22,4 @@ newtype ProcessId
 getProcProcessIds :: IO (Either ProcError [ProcessId])
 getProcProcessIds =
   runExceptT $
-    mapMaybe maybeProcessId <$> listProcDirectory "/proc"
-  where
-    maybeProcessId :: String -> Maybe ProcessId
-    maybeProcessId str =
-      case reads str of
-        [(i, "")] -> Just $ ProcessId i
-        _ -> Nothing
+    mapMaybe (fmap ProcessId . readMaybe) <$> listProcDirectory "/proc"
