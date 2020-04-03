@@ -1,36 +1,31 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module System.Linux.Proc.Tcp
-  ( TcpSocket(..)
-  , TcpState(..)
+  ( TcpSocket (..)
+  , TcpState (..)
   , readProcTcpSockets
   )
-where
+  where
 
-import           System.Linux.Proc.Errors       ( ProcError(..) )
-import           System.Linux.Proc.Process      ( ProcessId(..) )
-import           System.Linux.Proc.IO           ( readProcFile )
+import           Control.Error (runExceptT, throwE)
+import           Control.Monad (replicateM, void)
 
-import           Control.Error                  ( runExceptT
-                                                , throwE
-                                                )
+import           Data.Attoparsec.ByteString.Char8 (Parser)
+import qualified Data.Attoparsec.ByteString.Char8 as Atto
+import           Data.Bits ((.|.), shiftL)
+import           Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.List as List
+import qualified Data.Text as Text
 
-import           Data.Attoparsec.ByteString.Char8
-                                                ( Parser )
-import qualified Data.Attoparsec.ByteString.Char8
-                                               as A
-import qualified Data.ByteString.Char8         as BS
-import qualified Data.Text                     as T
-import           Data.List                      ( intersperse )
-import           Data.Bits                      ( shiftL
-                                                , (.|.)
-                                                )
-
-import           Control.Monad                  ( replicateM )
+import           System.Linux.Proc.Errors (ProcError (..))
+import           System.Linux.Proc.Process (ProcessId (..))
+import           System.Linux.Proc.IO (readProcFile)
 
 
-data TcpState =
-    TcpEstablished
+
+data TcpState
+  = TcpEstablished
   | TcpSynSent
   | TcpSynReceive
   | TcpFinWait1
@@ -47,120 +42,135 @@ data TcpState =
 -- | TCP socket used by a process according to the `/proc/<pid>/net/tcp`
 -- file of the process. Only non-debug fields are parsed and described the socket
 -- data structure.
-data TcpSocket = TcpSocket {
-    tcpLocalAddr :: !(BS.ByteString, Int),
-    tcpRemoteAddr :: !(BS.ByteString, Int),
-    tcpState :: !TcpState,
-    tcpUid :: !Int,
-    tcpInode :: !Int
-} deriving (Show)
+data TcpSocket = TcpSocket
+  { tcpLocalAddr :: !(ByteString, Int)
+  , tcpRemoteAddr :: !(ByteString, Int)
+  , tcpTcpState :: !TcpState
+  , tcpUid :: !Int
+  , tcpInode :: !Int
+  } deriving (Show)
 
 
 -- | Read and parse the `/proc/<pid>/net/tcp` file. Read and parse errors are caught
 -- and returned.
 readProcTcpSockets :: ProcessId -> IO (Either ProcError [TcpSocket])
-readProcTcpSockets pid = runExceptT $ do
-  let fpNetTcp' = fpNetTcp pid
-  bs <- readProcFile fpNetTcp'
-  case A.parseOnly (parseTcpSockets <* A.endOfInput) bs of
-    Left  e  -> throwE $ ProcParseError fpNetTcp' (T.pack e)
-    Right ss -> pure ss
+readProcTcpSockets pid =
+  runExceptT $ do
+    let fpath = mkNetTcpPath pid
+    bs <- readProcFile fpath
+    case Atto.parseOnly (pTcpSocketList <* Atto.endOfInput) bs of
+      Left  e  -> throwE $ ProcParseError fpath (Text.pack e)
+      Right ss -> pure ss
 
 
 -- -----------------------------------------------------------------------------
 -- Internals.
 
-fpNetTcp :: ProcessId -> FilePath
-fpNetTcp (ProcessId pid) = "/proc/" ++ show pid ++ "/net/tcp"
-
+mkNetTcpPath :: ProcessId -> FilePath
+mkNetTcpPath (ProcessId pid) = "/proc/" ++ show pid ++ "/net/tcp"
 
 -- -----------------------------------------------------------------------------
 -- Parsers.
 
-parseTcpSockets :: Parser [TcpSocket]
-parseTcpSockets = headers *> A.many' record
+pTcpSocketList :: Parser [TcpSocket]
+pTcpSocketList = pHeaders *> Atto.many' pTcpSocket
 
--- Parse a single space. The net/tcp file does not use tabs. Attoparsec's space
+-- Parse a single pSpace. The net/tcp file does not use tabs. Attoparsec's pSpace
 -- includes tab, newline and return feed which captures too much in our case.
-space :: Parser Char
-space = A.char ' '
+pSpace :: Parser Char
+pSpace = Atto.char ' '
 
-headers :: Parser BS.ByteString
-headers =
-  A.many1 space
-    *> A.string
-         "sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode"
-    <* A.many1 space
-    <* A.endOfLine
+pMany1Space :: Parser ()
+pMany1Space = void $ Atto.many1 pSpace
 
-record :: Parser TcpSocket
-record = do
-  _          <- delim
-  _          <- (A.many1 A.digit *> A.char ':') <* delim -- Parse kernel slot
-  localAddr  <- addr <* delim
-  remoteAddr <- addr <* delim
-  tcpState'  <- state <* delim
-  _          <- internalData
-  uid        <- A.decimal <* delim :: Parser Int
-  _          <- A.hexadecimal <* delim :: Parser Int -- internal kernel state
-  inode      <- A.decimal <* delim :: Parser Int
-  _          <- A.many1 (A.satisfy (/= '\n')) -- remaining internal state
-  _          <- A.endOfLine
-  return $ TcpSocket localAddr remoteAddr tcpState' uid inode
-  where delim = A.many1 space
+pStringSpace :: ByteString -> Parser ()
+pStringSpace s =
+  Atto.string s *> pMany1Space
 
-internalData :: Parser ()
-internalData = do
-  _ <- A.hexadecimal :: Parser Int -- outgoing data queue
-  _ <- A.char ':'
-  _ <- A.hexadecimal :: Parser Int -- incoming data queue
-  _ <- A.many1 space
-  _ <- A.hexadecimal :: Parser Int -- internal kernel state
-  _ <- A.char ':'
-  _ <- A.hexadecimal :: Parser Int -- internal kernel state
-  _ <- A.many1 space
-  _ <- A.hexadecimal :: Parser Int -- internal kernel state
-  _ <- A.many1 space
-  return ()
+pHeaders :: Parser ()
+pHeaders =
+  pMany1Space
+    *> pStringSpace "sl"
+    *> pStringSpace "local_address"
+    *> pStringSpace "rem_address"
+    *> pStringSpace "st"
+    *> pStringSpace "tx_queue"
+    *> pStringSpace "rx_queue"
+    *> pStringSpace "tr"
+    *> pStringSpace "tm->when"
+    *> pStringSpace "retrnsmt"
+    *> pStringSpace "uid"
+    *> pStringSpace "timeout inode"
+    <* Atto.endOfLine
+
+pTcpSocket :: Parser TcpSocket
+pTcpSocket = do
+  _          <- pMany1Space
+  _          <- (Atto.many1 Atto.digit *> Atto.char ':') <* pMany1Space -- Parse kernel slot
+  localAddr  <- pAddressPort <* pMany1Space
+  remoteAddr <- pAddressPort <* pMany1Space
+  tcpState   <- pTcpState <* pMany1Space
+  _          <- pInternalData
+  uid        <- Atto.decimal <* pMany1Space
+  _          <- Atto.hexadecimal <* pMany1Space :: Parser Int -- internal kernel state
+  inode      <- Atto.decimal <* pMany1Space :: Parser Int
+  _          <- Atto.many1 (Atto.satisfy (/= '\n')) -- remaining internal state
+  _          <- Atto.endOfLine
+  pure $ TcpSocket localAddr remoteAddr tcpState uid inode
+
+pInternalData :: Parser ()
+pInternalData = do
+  _ <- Atto.hexadecimal :: Parser Int -- outgoing data queue
+  _ <- Atto.char ':'
+  _ <- Atto.hexadecimal :: Parser Int -- incoming data queue
+  _ <- Atto.many1 pSpace
+  _ <- Atto.hexadecimal :: Parser Int -- internal kernel state
+  _ <- Atto.char ':'
+  _ <- Atto.hexadecimal :: Parser Int -- internal kernel state
+  _ <- Atto.many1 pSpace
+  _ <- Atto.hexadecimal :: Parser Int -- internal kernel state
+  _ <- Atto.many1 pSpace
+  pure ()
 
 -- The address parts of the `net/tcp` file is a hexadecimal representation of the IP
 -- address and the port. The octets of the IP address have been reversed: 127.0.0.1
 -- has been reversed to 1.0.0.127 and then rendered as hex numbers. The port is only
 -- rendered as a hex number; it's not been reversed.
-addr :: Parser (BS.ByteString, Int)
-addr = do
-  addrParts <- replicateM 4 $ hexadecimalOfLength 2
-  _         <- A.char ':'
-  port      <- hexadecimalOfLength 4
+pAddressPort :: Parser (ByteString, Int)
+pAddressPort = do
+  addrParts <- replicateM 4 $ pHexadecimalOfLength 2
+  _         <- Atto.char ':'
+  port      <- pHexadecimalOfLength 4
   let addr' =
-        BS.concat . intersperse "." . fmap (BS.pack . show) $ reverse addrParts
-  return (addr', port)
+        BS.concat . List.intersperse "." . fmap (BS.pack . show) $ reverse addrParts
+  pure (addr', port)
 
 -- See include/net/tcp_states.h of your kernel's source code for all possible states.
-state :: Parser TcpState
-state = lookupState <$> (A.char '0' *> A.satisfy (A.inClass "1-9A-C"))
- where
-  lookupState :: Char -> TcpState
-  lookupState '1' = TcpEstablished
-  lookupState '2' = TcpSynSent
-  lookupState '3' = TcpSynReceive
-  lookupState '4' = TcpFinWait1
-  lookupState '5' = TcpFinWait2
-  lookupState '6' = TcpTimeWait
-  lookupState '7' = TcpClose
-  lookupState '8' = TcpCloseWait
-  lookupState '9' = TcpLastAck
-  lookupState 'A' = TcpListen
-  lookupState 'B' = TcpClosing
-  lookupState 'C' = TcpNewSynReceive
-  lookupState _   = undefined -- Intentionally undefined.
+pTcpState :: Parser TcpState
+pTcpState =
+    lookupState <$> (Atto.char '0' *> Atto.anyChar)
+  where
+    lookupState :: Char -> TcpState
+    lookupState '1' = TcpEstablished
+    lookupState '2' = TcpSynSent
+    lookupState '3' = TcpSynReceive
+    lookupState '4' = TcpFinWait1
+    lookupState '5' = TcpFinWait2
+    lookupState '6' = TcpTimeWait
+    lookupState '7' = TcpClose
+    lookupState '8' = TcpCloseWait
+    lookupState '9' = TcpLastAck
+    lookupState 'A' = TcpListen
+    lookupState 'B' = TcpClosing
+    lookupState 'C' = TcpNewSynReceive
+    lookupState c = error $ "System.Linux.Proc.Tcp.pTcpState: " ++ show c
 
 -- Helper parser for hexadecimal strings of a known length. Attoparsec's hexadecimal
 -- will keep parsing digits to cover cases like '1', 'AB2', 'deadbeef', etc. In our
 -- case we need to parse cases of exact length like port numbers.
-hexadecimalOfLength :: Int -> Parser Int
-hexadecimalOfLength n = do
-  ds <- A.count n (A.satisfy (isHexDigit . fromEnum))
+pHexadecimalOfLength :: Int -> Parser Int
+pHexadecimalOfLength n = do
+  ds <- Atto.count n (Atto.satisfy (isHexDigit . fromEnum))
   return $ foldl step 0 (fmap (fromEnum :: Char -> Int) ds)
  where
   isHexDigit :: Int -> Bool
