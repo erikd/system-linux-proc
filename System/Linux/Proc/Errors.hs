@@ -7,7 +7,7 @@ module System.Linux.Proc.Errors
   ) where
 
 import           Data.Text (Text)
-import qualified Data.Text as T
+import qualified Data.Text as Text
 
 
 data ProcError
@@ -18,11 +18,11 @@ data ProcError
 
 renderProcError :: ProcError -> Text
 renderProcError = \case
-  ProcReadError fp msg -> T.concat
-    [ "Error reading '", T.pack fp, "': ", msg ]
-  ProcParseError fp msg -> T.concat
-    [ "Parser error on file '", T.pack fp, ": ", msg ]
-  ProcMemInfoKeyError key -> T.concat
+  ProcReadError fp msg -> mconcat
+    [ "Error reading '", Text.pack fp, "': ", msg ]
+  ProcParseError fp msg -> mconcat
+    [ "Parser error on file '", Text.pack fp, ": ", msg ]
+  ProcMemInfoKeyError key -> mconcat
     [ "MemInfo: Key not found: '", key, "'" ]
 
 

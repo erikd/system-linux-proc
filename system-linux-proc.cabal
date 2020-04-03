@@ -22,7 +22,8 @@ library
   ghc-options:        -Wall -fwarn-tabs
   hs-source-dirs:    .
 
-  exposed-modules:     System.Linux.Proc.Errors
+  exposed-modules:     System.Linux.Proc
+                     , System.Linux.Proc.Errors
                      , System.Linux.Proc.IO
                      , System.Linux.Proc.MemInfo
                      , System.Linux.Proc.Process
@@ -40,8 +41,14 @@ test-suite test
   ghc-options:        -Wall -fwarn-tabs -threaded -O2
   type:               exitcode-stdio-1.0
 
-  main-is:            test-io.hs
   hs-source-dirs:     test
+  main-is:            test-io.hs
+
+  other-modules:      Test.System.Linux.Proc
+                      Test.System.Linux.Proc.Hedgehog
 
   build-depends:       base                          >= 4.8         && < 5.0
-                     , hedgehog
+                     , directory                     == 1.3.*
+                     , hedgehog                      == 1.0.*
+                     , pretty-show                   == 1.10.*
+                     , system-linux-proc
