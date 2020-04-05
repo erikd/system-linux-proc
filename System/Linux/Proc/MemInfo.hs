@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module System.Linux.Proc.MemInfo
@@ -18,7 +19,9 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (mapMaybe)
+#if ! MIN_VERSION_base(4,14,0)
 import           Data.Monoid ((<>))
+#endif
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Word (Word64)
