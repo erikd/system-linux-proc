@@ -39,7 +39,7 @@ data MemInfo = MemInfo
   , memFree :: !Word64 -- ^ Total free RAM (which includes memory used for filesystem caching).
   , memAvailable :: !Word64 -- ^ Available memory.
   , memBuffers :: !Word64 -- ^ Amount of RAM used for file buffers.
-  , memSwapTotal :: !Word64 -- ^ Total about of swap space.
+  , memSwapTotal :: !Word64 -- ^ Total amount of swap space.
   , memSwapFree :: !Word64 -- ^ Amount of swap space that is free.
   } deriving (Eq, Show)
 
