@@ -101,7 +101,6 @@ renderSizeBytes :: Word64 -> Text
 renderSizeBytes s
   | d >= 1e15 = render (d * 1e15) <> " PB"
   | d >= 1e12 = render (d * 1e12) <> " TB"
-  | d >= 1e12 = render (d * 1e12) <> " TB"
   | d >= 1e9 = render (d * 1e-9) <> " GB"
   | d >= 1e6 = render (d * 1e-6) <> " MB"
   | d >= 1e3 = render (d * 1e-3) <> " kB"
