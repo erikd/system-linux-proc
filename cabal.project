@@ -1,10 +1,21 @@
 packages:
   ./
 
-allow-newer: hedgehog:template-haskell
-
 -- Build all tests by default
 tests: True
 
 -- Show full test output
 test-show-details: direct
+
+if impl (ghc >= 9.12)
+  allow-newer:
+    , attoparsec:ghc-prim
+    , boring:base
+    , hashable:base
+    , hedgehog:template-haskell
+    , integer-logarithms:base
+    , integer-logarithms:ghc-prim
+    , scientific:base
+    , scientific:template-haskell
+    , text:bytestring
+    , text:ghc-prim
