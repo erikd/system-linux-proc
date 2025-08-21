@@ -7,15 +7,25 @@ tests: True
 -- Show full test output
 test-show-details: direct
 
-if impl (ghc >= 9.12)
+if impl (ghc >= 9.14)
   allow-newer:
-    , attoparsec:ghc-prim
+    , async:base
     , boring:base
     , hashable:base
+    , hashable:ghc-bignum
+    , hashable:containers
+    , hedgehog:time
     , hedgehog:template-haskell
+    , hsc2hs:base
+    , hsc2hs:process
     , integer-logarithms:base
-    , integer-logarithms:ghc-prim
+    , integer-logarithms:ghc-bignum
+    , lifted-async:base
+    , primitive:base
+    , process:base
     , scientific:base
+    , scientific:containers
     , scientific:template-haskell
-    , text:bytestring
-    , text:ghc-prim
+    , tagged:template-haskell
+    , terminal-size:base
+    , unix:time
