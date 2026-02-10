@@ -51,6 +51,6 @@ test-suite test
                       Test.System.Linux.Proc.Hedgehog
 
   build-depends:       base                          >= 4.8         && < 5.0
-                     , hedgehog                      >= 1.0         && < 1.7
+                     , hedgehog                      >= 1.0         && < 1.8
                      , pretty-show                   == 1.10.*
                      , system-linux-proc
